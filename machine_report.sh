@@ -1,23 +1,26 @@
 #!/bin/bash
-# TR-100 Machine Report
-# Copyright © 2024, U.S. Graphics, LLC. BSD-3-Clause License.
+# AU-100 Machine Report (macOS edition)
+# Derived from TR-100 Machine Report by U.S. Graphics, LLC.
+# Copyright (c) 2024, U.S. Graphics, LLC. BSD-3-Clause License.
 
 # Global variables
 MIN_NAME_LEN=5
 MAX_NAME_LEN=13
-
-MIN_DATA_LEN=20
 MAX_DATA_LEN=32
-
 BORDERS_AND_PADDING=7
 
-# Basic configuration, change as needed
-report_title="UNITED STATES GRAPHICS COMPANY"
+# Basic configuration
+report_title="ABSOLUTE UNIT RESEARCH"
 last_login_ip_present=0
-zfs_present=0
-zfs_filesystem="zroot/ROOT/os"
 
-# Utilities
+# Optional features
+ENABLE_PUBLIC_IP=0
+PUBLIC_IP_TIMEOUT=2
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 max_length() {
     local max_len=0
     local len
@@ -29,40 +32,44 @@ max_length() {
         fi
     done
 
-    if [ $max_len -lt $MAX_DATA_LEN ]; then
+    if [ "$max_len" -lt "$MAX_DATA_LEN" ]; then
         printf '%s' "$max_len"
     else
         printf '%s' "$MAX_DATA_LEN"
     fi
 }
 
-# All data strings must go here
 set_current_len() {
-    CURRENT_LEN=$(max_length                                     \
-        "$report_title"                                          \
-        "$os_name"                                               \
-        "$os_kernel"                                             \
-        "$net_hostname"                                          \
-        "$net_machine_ip"                                        \
-        "$net_client_ip"                                         \
-        "$net_current_user"                                      \
-        "$cpu_model"                                             \
-        "$cpu_cores_per_socket vCPU(s) / $cpu_sockets Socket(s)" \
-        "$cpu_hypervisor"                                        \
-        "$cpu_freq GHz"                                          \
-        "$cpu_1min_bar_graph"                                    \
-        "$cpu_5min_bar_graph"                                    \
-        "$cpu_15min_bar_graph"                                   \
-        "$zfs_used_gb/$zfs_available_gb GB [$disk_percent%]"     \
-        "$disk_bar_graph"                                        \
-        "$zfs_health"                                            \
-        "$root_used_gb/$root_total_gb GB [$disk_percent%]"       \
-        "${mem_used_gb}/${mem_total_gb} GiB [${mem_percent}%]"   \
-        "${mem_bar_graph}"                                       \
-        "$last_login_time"                                       \
-        "$last_login_ip"                                         \
-        "$last_login_ip"                                         \
-        "$sys_uptime"                                            \
+    CURRENT_LEN=$(max_length                                  \
+        "$report_title"                                      \
+        "$os_name"                                           \
+        "$os_kernel"                                         \
+        "$macos_full_version"                                \
+        "$model_name"                                        \
+        "$model_identifier"                                  \
+        "$chip_name"                                         \
+        "$core_display"                                      \
+        "$memory_total_text"                                 \
+        "$serial_number"                                     \
+        "$net_hostname"                                      \
+        "$net_machine_ip"                                    \
+        "$net_client_ip"                                     \
+        "$net_interface"                                     \
+        "$net_public_ip"                                     \
+        "$net_current_user"                                  \
+        "$cpu_1min_bar_graph"                                \
+        "$cpu_5min_bar_graph"                                \
+        "$cpu_15min_bar_graph"                               \
+        "$root_used_gb/$root_total_gb GB [$disk_percent%]"   \
+        "$disk_bar_graph"                                    \
+        "${mem_used_gb}/${mem_total_gb} GiB [${mem_percent}%]" \
+        "${mem_bar_graph}"                                   \
+        "$battery_status"                                    \
+        "$vpn_status"                                        \
+        "$security_status"                                   \
+        "$last_login_time"                                   \
+        "$last_login_ip"                                     \
+        "$sys_uptime"                                        \
     )
 }
 
@@ -95,7 +102,6 @@ PRINT_CENTERED_DATA() {
 }
 
 PRINT_DIVIDER() {
-    # either "top" or "bottom", no argument means middle divider
     local side="$1"
     case "$side" in
         "top")
@@ -131,7 +137,6 @@ PRINT_DATA() {
     local data="$2"
     local max_data_len=$CURRENT_LEN
 
-    # Pad name
     local name_len=${#name}
     if (( name_len < MIN_NAME_LEN )); then
         name=$(printf "%-${MIN_NAME_LEN}s" "$name")
@@ -141,28 +146,14 @@ PRINT_DATA() {
         name=$(printf "%-${MAX_NAME_LEN}s" "$name")
     fi
 
-    # Truncate or pad data
     local data_len=${#data}
     if (( data_len >= MAX_DATA_LEN || data_len == MAX_DATA_LEN-1 )); then
-        data=$(echo "$data" | cut -c 1-$((MAX_DATA_LEN-3-2)))...
+        data=$(echo "$data" | cut -c 1-$((MAX_DATA_LEN-5)))...
     else
         data=$(printf "%-${max_data_len}s" "$data")
     fi
 
     printf "│ %-${MAX_NAME_LEN}s │ %s │\n" "$name" "$data"
-}
-
-PRINT_FOOTER() {
-    local length=$((CURRENT_LEN+MAX_NAME_LEN+BORDERS_AND_PADDING))
-    local footer="└"
-    for (( i = 0; i < length - 3; i++ )); do
-        footer+="─"
-        if [ "$i" -eq 14 ]; then
-            footer+="┴"
-        fi
-    done
-    footer+="┘"
-    printf '%s\n' "$footer"
 }
 
 bar_graph() {
@@ -180,6 +171,12 @@ bar_graph() {
     fi
 
     num_blocks=$(awk -v percent="$percent" -v width="$width" 'BEGIN { printf "%d", (percent / 100) * width }')
+    if (( num_blocks > width )); then
+        num_blocks=$width
+    fi
+    if (( num_blocks < 0 )); then
+        num_blocks=0
+    fi
 
     for (( i = 0; i < num_blocks; i++ )); do
         graph+="█"
@@ -187,197 +184,337 @@ bar_graph() {
     for (( i = num_blocks; i < width; i++ )); do
         graph+="░"
     done
-    printf "%s" "${graph}"
+    printf "%s" "$graph"
 }
 
 get_ip_addr() {
-    # Initialize variables
-    ipv4_address=""
-    ipv6_address=""
+    local ipv4_address
+    local ipv6_address
 
-    # Check if ifconfig command exists
-    if command -v ifconfig &> /dev/null; then
-        # Try to get IPv4 address using ifconfig
-        ipv4_address=$(ifconfig | awk '
-            /^[a-z]/ {iface=$1}
-            iface != "lo:" && iface !~ /^docker/ && /inet / && !found_ipv4 {found_ipv4=1; print $2}')
+    ipv4_address=$(ifconfig 2>/dev/null | awk '
+        /^[a-z0-9]/ {iface=$1; sub(":$", "", iface)}
+        iface !~ /^lo/ && iface !~ /^utun/ && iface !~ /^awdl/ && /inet / && !found_ipv4 {found_ipv4=1; print $2}')
 
-        # If IPv4 address not available, try IPv6 using ifconfig
-        if [ -z "$ipv4_address" ]; then
-            ipv6_address=$(ifconfig | awk '
-                /^[a-z]/ {iface=$1}
-                iface != "lo:" && iface !~ /^docker/ && /inet6 / && !found_ipv6 {found_ipv6=1; print $2}')
-        fi
-    elif command -v ip &> /dev/null; then
-        # Try to get IPv4 address using ip addr
-        ipv4_address=$(ip -o -4 addr show | awk '
-            $2 != "lo" && $2 !~ /^docker/ {split($4, a, "/"); if (!found_ipv4++) print a[1]}')
-
-        # If IPv4 address not available, try IPv6 using ip addr
-        if [ -z "$ipv4_address" ]; then
-            ipv6_address=$(ip -o -6 addr show | awk '
-                $2 != "lo" && $2 !~ /^docker/ {split($4, a, "/"); if (!found_ipv6++) print a[1]}')
-        fi
+    if [ -n "$ipv4_address" ]; then
+        printf '%s' "$ipv4_address"
+        return
     fi
 
-    # If neither IPv4 nor IPv6 address is available, assign "No IP found"
-    if [ -z "$ipv4_address" ] && [ -z "$ipv6_address" ]; then
-        ip_address="No IP found"
+    ipv6_address=$(ifconfig 2>/dev/null | awk '
+        /^[a-z0-9]/ {iface=$1; sub(":$", "", iface)}
+        iface !~ /^lo/ && iface !~ /^utun/ && iface !~ /^awdl/ && /inet6 / && !found_ipv6 {found_ipv6=1; print $2}')
+
+    if [ -n "$ipv6_address" ]; then
+        printf '%s' "$ipv6_address"
     else
-        # Prioritize IPv4 if available, otherwise use IPv6
-        ip_address="${ipv4_address:-$ipv6_address}"
+        printf '%s' "No IP found"
     fi
-
-    printf '%s' "$ip_address"
 }
 
-# Operating System Information
-source /etc/os-release
-os_name="${ID^} ${VERSION} ${VERSION_CODENAME^}"
-os_kernel=$({ uname; uname -r; } | tr '\n' ' ')
+get_default_iface() {
+    local iface
 
-# Network Information
-net_current_user=$(whoami)
-if ! [ "$(command -v hostname)" ]; then
-    net_hostname=$(grep -w "$(uname -n)" /etc/hosts | awk '{print $2}' | head -n 1)
+    iface=$(route -n get default 2>/dev/null | awk '/interface:/ {print $2; exit}')
+    if [ -n "$iface" ]; then
+        printf '%s' "$iface"
+        return
+    fi
+
+    iface=$(ifconfig 2>/dev/null | awk '
+        /^[a-z0-9].*flags=/ {gsub(":", "", $1); cur=$1}
+        /status: active/ && cur !~ /^(lo|gif|stf|anpi|utun|awdl|llw)/ {print cur; exit}
+    ')
+
+    if [ -n "$iface" ]; then
+        printf '%s' "$iface"
+    else
+        printf '%s' "Unavailable"
+    fi
+}
+
+get_public_ip() {
+    if [ "$ENABLE_PUBLIC_IP" -ne 1 ]; then
+        printf '%s' "Disabled"
+        return
+    fi
+
+    if command_exists curl; then
+        local pip
+        pip=$(curl -4 -fsS --max-time "$PUBLIC_IP_TIMEOUT" https://api.ipify.org 2>/dev/null)
+        if [ -z "$pip" ]; then
+            pip=$(curl -6 -fsS --max-time "$PUBLIC_IP_TIMEOUT" https://api64.ipify.org 2>/dev/null)
+        fi
+        if [ -n "$pip" ]; then
+            printf '%s' "$pip"
+            return
+        fi
+    fi
+
+    printf '%s' "Unavailable"
+}
+
+# Apple hardware/software info
+sp_all=$(system_profiler SPHardwareDataType SPSoftwareDataType 2>/dev/null)
+
+model_name=$(printf '%s\n' "$sp_all" | awk -F': ' '/Model Name:/ {print $2; exit}')
+model_identifier=$(printf '%s\n' "$sp_all" | awk -F': ' '/Model Identifier:/ {print $2; exit}')
+chip_name=$(printf '%s\n' "$sp_all" | awk -F': ' '/Chip:/ {print $2; exit}')
+core_detail=$(printf '%s\n' "$sp_all" | awk -F': ' '/Total Number of Cores:/ {print $2; exit}')
+memory_total_text=$(printf '%s\n' "$sp_all" | awk -F': ' '/Memory:/ {print $2; exit}')
+serial_number=$(printf '%s\n' "$sp_all" | awk -F': ' '/Serial Number \(system\):/ {print $2; exit}')
+
+macos_full_version=$(printf '%s\n' "$sp_all" | awk -F': ' '/System Version:/ {print $2; exit}')
+os_kernel=$(printf '%s\n' "$sp_all" | awk -F': ' '/Kernel Version:/ {print $2; exit}')
+sip_status=$(printf '%s\n' "$sp_all" | awk -F': ' '/System Integrity Protection:/ {print $2; exit}')
+secure_vm_status=$(printf '%s\n' "$sp_all" | awk -F': ' '/Secure Virtual Memory:/ {print $2; exit}')
+
+# Fallbacks
+if [ -z "$model_name" ]; then model_name="Mac"; fi
+if [ -z "$model_identifier" ]; then model_identifier="Unavailable"; fi
+if [ -z "$chip_name" ]; then chip_name="Unavailable"; fi
+if [ -z "$core_detail" ]; then core_detail="Unavailable"; fi
+if [ -z "$memory_total_text" ]; then memory_total_text="Unavailable"; fi
+if [ -z "$serial_number" ]; then serial_number="Unavailable"; fi
+if [ -z "$macos_full_version" ]; then macos_full_version="$(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null)"; fi
+if [ -z "$os_kernel" ]; then os_kernel="Darwin $(uname -r)"; fi
+if [ -z "$sip_status" ]; then sip_status="Unavailable"; fi
+if [ -z "$secure_vm_status" ]; then secure_vm_status="Unavailable"; fi
+
+os_name="macOS"
+core_count=$(printf '%s\n' "$core_detail" | awk '{print $1}')
+if printf '%s' "$core_count" | grep -Eq '^[0-9]+$'; then
+    core_display="${core_count}-core"
 else
-    net_hostname=$(hostname -f)
+    core_display="$core_detail"
 fi
 
-if [ -z "$net_hostname" ]; then net_hostname="Not Defined"; fi
+# Network info
+net_current_user=$(whoami)
+net_hostname=$(hostname -f 2>/dev/null)
+if [ -z "$net_hostname" ]; then
+    net_hostname=$(hostname 2>/dev/null)
+fi
+if [ -z "$net_hostname" ]; then
+    net_hostname="Not Defined"
+fi
 
 net_machine_ip=$(get_ip_addr)
-net_client_ip=$(who am i | awk '{print $5}' | tr -d '()')
+net_client_ip=$(who am i 2>/dev/null | sed -nE 's/.*\(([^)]+)\).*/\1/p')
 if [ -z "$net_client_ip" ]; then
     net_client_ip="Not connected"
 fi
-net_dns_ip=($(grep '^nameserver [0-9.]' /etc/resolv.conf | awk '{print $2}'))
+net_interface=$(get_default_iface)
+net_public_ip=$(get_public_ip)
 
-# CPU Information
-cpu_model="$(lscpu | grep 'Model name' | grep -v 'BIOS' | cut -f 2 -d ':' | awk '{print $1 " "  $2 " " $3 " " $4}')"
-cpu_hypervisor="$(lscpu | grep 'Hypervisor vendor' | cut -f 2 -d ':' | awk '{$1=$1}1')"
-if [ -z "$cpu_hypervisor" ]; then
-    cpu_hypervisor="Bare Metal"
+net_dns_ip=()
+while IFS= read -r dns; do
+    [ -n "$dns" ] && net_dns_ip+=("$dns")
+done < <(scutil --dns 2>/dev/null | awk '/nameserver\[[0-9]+\]/ {print $3}' | awk '!seen[$0]++')
+
+if [ "${#net_dns_ip[@]}" -eq 0 ] && [ -f /etc/resolv.conf ]; then
+    while IFS= read -r dns; do
+        [ -n "$dns" ] && net_dns_ip+=("$dns")
+    done < <(grep '^nameserver ' /etc/resolv.conf | awk '{print $2}')
+fi
+if [ "${#net_dns_ip[@]}" -eq 0 ]; then
+    net_dns_ip=("Unavailable")
+fi
+if [ "${#net_dns_ip[@]}" -gt 3 ]; then
+    net_dns_ip=("${net_dns_ip[@]:0:3}")
 fi
 
-cpu_cores="$(nproc --all)"
-cpu_cores_per_socket="$(lscpu | grep 'Core(s) per socket' | cut -f 2 -d ':'| awk '{$1=$1}1')"
-cpu_sockets="$(lscpu | grep 'Socket(s)' | cut -f 2 -d ':' | awk '{$1=$1}1')"
-cpu_freq="$(grep 'cpu MHz' /proc/cpuinfo | cut -f 2 -d ':' | awk 'NR==1 { printf "%.2f", $1 / 1000 }')" # Convert from M to G units
+# Load and cores for graphs
+cpu_cores=$(printf '%s\n' "$core_detail" | awk '{print $1}')
+if [ -z "$cpu_cores" ] || ! printf '%s' "$cpu_cores" | awk '/^[0-9]+$/ {ok=1} END {exit !ok}'; then
+    cpu_cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null)
+fi
+if [ -z "$cpu_cores" ]; then cpu_cores=1; fi
 
-load_avg_1min=$(uptime | awk -F'load average: ' '{print $2}' | cut -d ',' -f1 | tr -d ' ')
-load_avg_5min=$(uptime | awk -F'load average: ' '{print $2}' | cut -d ',' -f2 | tr -d ' ')
-load_avg_15min=$(uptime| awk -F'load average: ' '{print $2}' | cut -d ',' -f3 | tr -d ' ')
+load_values=$(uptime 2>/dev/null | sed -E 's/.*load averages?: //; s/,//g')
+load_avg_1min=$(printf '%s\n' "$load_values" | awk '{print $1}')
+load_avg_5min=$(printf '%s\n' "$load_values" | awk '{print $2}')
+load_avg_15min=$(printf '%s\n' "$load_values" | awk '{print $3}')
+if [ -z "$load_avg_1min" ]; then load_avg_1min=0; fi
+if [ -z "$load_avg_5min" ]; then load_avg_5min=0; fi
+if [ -z "$load_avg_15min" ]; then load_avg_15min=0; fi
 
-# Memory Information
-mem_total=$(grep 'MemTotal' /proc/meminfo | awk '{print $2}')
-mem_available=$(grep 'MemAvailable' /proc/meminfo | awk '{print $2}')
+# Memory info (macOS vm_stat)
+vm_stats=$(vm_stat 2>/dev/null)
+page_size=$(printf '%s\n' "$vm_stats" | awk -F'page size of | bytes' 'NR==1 {print $2}')
+pages_free=$(printf '%s\n' "$vm_stats" | awk '/Pages free/ {gsub("\\.","",$3); print $3}')
+pages_active=$(printf '%s\n' "$vm_stats" | awk '/Pages active/ {gsub("\\.","",$3); print $3}')
+pages_inactive=$(printf '%s\n' "$vm_stats" | awk '/Pages inactive/ {gsub("\\.","",$3); print $3}')
+pages_speculative=$(printf '%s\n' "$vm_stats" | awk '/Pages speculative/ {gsub("\\.","",$3); print $3}')
+pages_wired=$(printf '%s\n' "$vm_stats" | awk '/Pages wired down/ {gsub("\\.","",$4); print $4}')
+pages_compressed=$(printf '%s\n' "$vm_stats" | awk '/Pages occupied by compressor/ {gsub("\\.","",$5); print $5}')
+
+if [ -z "$page_size" ]; then page_size=4096; fi
+if [ -z "$pages_free" ]; then pages_free=0; fi
+if [ -z "$pages_active" ]; then pages_active=0; fi
+if [ -z "$pages_inactive" ]; then pages_inactive=0; fi
+if [ -z "$pages_speculative" ]; then pages_speculative=0; fi
+if [ -z "$pages_wired" ]; then pages_wired=0; fi
+if [ -z "$pages_compressed" ]; then pages_compressed=0; fi
+
+total_pages=$((pages_free + pages_active + pages_inactive + pages_speculative + pages_wired + pages_compressed))
+mem_total=$((total_pages * page_size))
+mem_available=$(((pages_free + pages_speculative) * page_size))
 mem_used=$((mem_total - mem_available))
-mem_percent=$(awk -v used="$mem_used" -v total="$mem_total" 'BEGIN { printf "%.2f", (used / total) * 100 }')
-mem_percent=$(printf "%.2f" "$mem_percent")
-mem_total_gb=$(echo "$mem_total" | awk '{ printf "%.2f", $1 / (1024 * 1024) }') # (From Ki to Gi units)
-mem_available_gb=$(echo "$mem_available" | awk '{ printf "%.2f", $1 / (1024 * 1024) }') # (From Ki to Gi units) Not used currently
-mem_used_gb=$(echo "$mem_used" | awk '{ printf "%.2f", $1 / (1024 * 1024) }')
+if [ "$mem_used" -lt 0 ]; then mem_used=0; fi
 
-# Disk Information
-if [ "$(command -v zfs)" ] && [ "$(grep -q "zfs" /proc/mounts)" ]; then
-    zfs_present=1
-    zfs_health=$(zpool status -x zroot | grep -q "is healthy" && echo  "HEALTH O.K.")
-    zfs_available=$(zfs get -o value -Hp available "$zfs_filesystem")
-    zfs_used=$(zfs get -o value -Hp used "$zfs_filesystem")
-    zfs_available_gb=$(echo "$zfs_available" | awk '{ printf "%.2f", $1 / (1024 * 1024 * 1024) }') # (To G units)
-    zfs_used_gb=$(echo "$zfs_used" | awk '{ printf "%.2f", $1 / (1024 * 1024 * 1024) }') # (To G units)
-    disk_percent=$(awk -v used="$zfs_used" -v available="$zfs_available" 'BEGIN { printf "%.2f", (used / available) * 100 }')
-else
-    # Thanks https://github.com/AnarchistHoneybun
-    root_partition="/"
-    root_used=$(df -m "$root_partition" | awk 'NR==2 {print $3}')
-    root_total=$(df -m "$root_partition" | awk 'NR==2 {print $2}')
-    root_total_gb=$(awk -v total="$root_total" 'BEGIN { printf "%.2f", total / 1024 }')
-    root_used_gb=$(awk -v used="$root_used" 'BEGIN { printf "%.2f", used / 1024 }')
-    disk_percent=$(awk -v used="$root_used" -v total="$root_total" 'BEGIN { printf "%.2f", (used / total) * 100 }')
-fi
+mem_percent=$(awk -v used="$mem_used" -v total="$mem_total" 'BEGIN { if (total == 0) print "0.00"; else printf "%.2f", (used / total) * 100 }')
+mem_total_gb=$(awk -v total="$mem_total" 'BEGIN { printf "%.2f", total / (1024 * 1024 * 1024) }')
+mem_used_gb=$(awk -v used="$mem_used" 'BEGIN { printf "%.2f", used / (1024 * 1024 * 1024) }')
 
-# Last login and Uptime
-last_login=$(lastlog -u "$USER")
-last_login_ip=$(echo "$last_login" | awk 'NR==2 {print $3}')
+# Disk info (root volume)
+root_partition="/"
+root_used=$(df -k "$root_partition" 2>/dev/null | awk 'NR==2 {print $3}')
+root_total=$(df -k "$root_partition" 2>/dev/null | awk 'NR==2 {print $2}')
+if [ -z "$root_used" ]; then root_used=0; fi
+if [ -z "$root_total" ]; then root_total=1; fi
+root_total_gb=$(awk -v total="$root_total" 'BEGIN { printf "%.2f", total / (1024 * 1024) }')
+root_used_gb=$(awk -v used="$root_used" 'BEGIN { printf "%.2f", used / (1024 * 1024) }')
+disk_percent=$(awk -v used="$root_used" -v total="$root_total" 'BEGIN { if (total==0) print "0.00"; else printf "%.2f", (used / total) * 100 }')
 
-# Check if last_login_ip is an IP address
-if [[ "$last_login_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    last_login_ip_present=1
-    last_login_time=$(echo "$last_login" | awk 'NR==2 {print $6, $7, $10, $8}')
-else
-    last_login_time=$(echo "$last_login" | awk 'NR==2 {print $4, $5, $8, $6}')
-    # Check for **Never logged in** edge case
-    if [ "$last_login_time" = "in**" ]; then
-        last_login_time="Never logged in"
+# Battery
+battery_status="Unavailable"
+if command_exists pmset; then
+    battery_status=$(pmset -g batt 2>/dev/null | awk -F'; *' 'NR==2 {pct=$1; sub(/^.*\t/, "", pct); gsub(/^ +/, "", pct); state=$2; gsub(/^ +/, "", state); print pct " " state; exit}')
+    if [ -z "$battery_status" ]; then
+        battery_status="AC/no battery"
     fi
 fi
 
-sys_uptime=$(uptime -p | sed 's/up\s*//; s/\s*day\(s*\)/d/; s/\s*hour\(s*\)/h/; s/\s*minute\(s*\)/m/')
+# Temperature (optional; hidden if unavailable)
+temp_fan_status=""
+if command_exists istats; then
+    temp_fan_status=$(istats cpu temp 2>/dev/null | awk -F': ' '/CPU temp/ {print $2; exit}')
+elif command_exists powermetrics; then
+    temp_fan_status=$(powermetrics --samplers smc -n 1 2>/dev/null | awk -F': ' '/CPU die temperature/ {print $2; exit}')
+fi
+if [ -z "$temp_fan_status" ] || [ "$temp_fan_status" = "Unavailable" ]; then
+    temp_fan_status=""
+fi
 
-# Set current length before graphs get calculated
+# VPN
+vpn_status="Unavailable"
+if command_exists tailscale; then
+    ts_state=$(tailscale status --json 2>/dev/null | awk -F'"' '/"BackendState"/ {print $4; exit}')
+    ts_ip=$(tailscale ip -4 2>/dev/null | head -n 1)
+    if printf '%s' "$ts_ip" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+        vpn_status="Connected $ts_ip"
+    elif [ -n "$ts_state" ]; then
+        vpn_status="$ts_state"
+    else
+        vpn_status="Unavailable"
+    fi
+fi
+
+# Security
+security_status="SIP:${sip_status} SVM:${secure_vm_status}"
+
+# Last login
+last_login=$(last -n 1 "$USER" 2>/dev/null | head -n 1)
+if [ -z "$last_login" ] || echo "$last_login" | grep -q '^wtmp begins'; then
+    last_login_time="Never logged in"
+else
+    last_login_ip=$(echo "$last_login" | awk '{print $3}')
+    if [[ "$last_login_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        last_login_ip_present=1
+    fi
+    last_login_time=$(echo "$last_login" | awk '{print $3, $4, $5, $6}')
+    if echo "$last_login" | grep -q 'still logged in'; then
+        last_login_time="$last_login_time (active)"
+    fi
+fi
+
+# Uptime
+uptime_raw="$(uptime 2>/dev/null)"
+if echo "$uptime_raw" | grep -q ' up '; then
+    sys_uptime=$(printf '%s\n' "$uptime_raw" | sed -E 's/.* up //; s/, [0-9]+ users?.*//; s/, load averages?:.*//')
+else
+    boot_line="$(who -b 2>/dev/null)"
+    if [ -n "$boot_line" ]; then
+        boot_month="$(printf '%s\n' "$boot_line" | awk '{print $3}')"
+        boot_day="$(printf '%s\n' "$boot_line" | awk '{print $4}')"
+        boot_time="$(printf '%s\n' "$boot_line" | awk '{print $5}')"
+        current_year="$(date +%Y)"
+        boot_epoch="$(date -j -f "%b %e %Y %H:%M" "$boot_month $boot_day $current_year $boot_time" +%s 2>/dev/null)"
+        now_epoch="$(date +%s)"
+        if [ -n "$boot_epoch" ]; then
+            uptime_secs=$((now_epoch - boot_epoch))
+            if [ "$uptime_secs" -lt 0 ]; then uptime_secs=0; fi
+            up_days=$((uptime_secs / 86400))
+            up_hours=$(((uptime_secs % 86400) / 3600))
+            up_minutes=$(((uptime_secs % 3600) / 60))
+            sys_uptime="${up_days}d ${up_hours}h ${up_minutes}m"
+        else
+            sys_uptime="Unavailable"
+        fi
+    else
+        sys_uptime="Unavailable"
+    fi
+fi
+
+# Width before graphs
 set_current_len
 
-# Create graphs
+# Graphs
 cpu_1min_bar_graph=$(bar_graph "$load_avg_1min" "$cpu_cores")
 cpu_5min_bar_graph=$(bar_graph "$load_avg_5min" "$cpu_cores")
 cpu_15min_bar_graph=$(bar_graph "$load_avg_15min" "$cpu_cores")
-
 mem_bar_graph=$(bar_graph "$mem_used" "$mem_total")
+disk_bar_graph=$(bar_graph "$root_used" "$root_total")
 
-if [ $zfs_present -eq 1 ]; then
-    disk_bar_graph=$(bar_graph "$zfs_used" "$zfs_available")
-else
-    disk_bar_graph=$(bar_graph "$root_used" "$root_total")
-fi
-
-# Machine Report
+# Render
 PRINT_HEADER
 PRINT_CENTERED_DATA "$report_title"
-PRINT_CENTERED_DATA "TR-100 MACHINE REPORT"
+PRINT_CENTERED_DATA "AU-100 MACHINE REPORT"
 PRINT_DIVIDER "top"
 PRINT_DATA "OS" "$os_name"
 PRINT_DATA "KERNEL" "$os_kernel"
+PRINT_DATA "MACOS" "$macos_full_version"
+
+PRINT_DIVIDER
+PRINT_DATA "MODEL" "$model_name"
+PRINT_DATA "MODEL ID" "$model_identifier"
+PRINT_DATA "CHIP" "$chip_name"
+PRINT_DATA "CORES" "$core_display"
+PRINT_DATA "MEMORY" "$memory_total_text"
+PRINT_DATA "SERIAL" "$serial_number"
+
 PRINT_DIVIDER
 PRINT_DATA "HOSTNAME" "$net_hostname"
 PRINT_DATA "MACHINE IP" "$net_machine_ip"
 PRINT_DATA "CLIENT  IP" "$net_client_ip"
-
+PRINT_DATA "NET IFACE" "$net_interface"
+PRINT_DATA "PUBLIC IP" "$net_public_ip"
 for dns_num in "${!net_dns_ip[@]}"; do
     PRINT_DATA "DNS  IP $(($dns_num + 1))" "${net_dns_ip[dns_num]}"
 done
-
 PRINT_DATA "USER" "$net_current_user"
+
 PRINT_DIVIDER
-PRINT_DATA "PROCESSOR" "$cpu_model"
-PRINT_DATA "CORES" "$cpu_cores_per_socket vCPU(s) / $cpu_sockets Socket(s)"
-PRINT_DATA "HYPERVISOR" "$cpu_hypervisor"
-PRINT_DATA "CPU FREQ" "$cpu_freq GHz"
 PRINT_DATA "LOAD  1m" "$cpu_1min_bar_graph"
 PRINT_DATA "LOAD  5m" "$cpu_5min_bar_graph"
 PRINT_DATA "LOAD 15m" "$cpu_15min_bar_graph"
-
-if [ $zfs_present -eq 1 ]; then
-    PRINT_DIVIDER
-    PRINT_DATA "VOLUME" "$zfs_used_gb/$zfs_available_gb GB [$disk_percent%]"
-    PRINT_DATA "DISK USAGE" "$disk_bar_graph"
-    PRINT_DATA "ZFS HEALTH" "$zfs_health"
-else
-    PRINT_DIVIDER
-    PRINT_DATA "VOLUME" "$root_used_gb/$root_total_gb GB [$disk_percent%]"
-    PRINT_DATA "DISK USAGE" "$disk_bar_graph"
-fi
+PRINT_DATA "VOLUME" "$root_used_gb/$root_total_gb GB [$disk_percent%]"
+PRINT_DATA "DISK USAGE" "$disk_bar_graph"
+PRINT_DATA "RAM USE" "${mem_used_gb}/${mem_total_gb} GiB [${mem_percent}%]"
+PRINT_DATA "USAGE" "${mem_bar_graph}"
+PRINT_DATA "BATT" "$battery_status"
 
 PRINT_DIVIDER
-PRINT_DATA "MEMORY" "${mem_used_gb}/${mem_total_gb} GiB [${mem_percent}%]"
-PRINT_DATA "USAGE" "${mem_bar_graph}"
+if [ -n "$temp_fan_status" ]; then
+    PRINT_DATA "TEMP/FAN" "$temp_fan_status"
+fi
+PRINT_DATA "VPN" "$vpn_status"
+PRINT_DATA "SECURITY" "$security_status"
+
 PRINT_DIVIDER
 PRINT_DATA "LAST LOGIN" "$last_login_time"
-
-if [ $last_login_ip_present -eq 1 ]; then
+if [ "$last_login_ip_present" -eq 1 ]; then
     PRINT_DATA "" "$last_login_ip"
 fi
-
 PRINT_DATA "UPTIME" "$sys_uptime"
 PRINT_DIVIDER "bottom"
