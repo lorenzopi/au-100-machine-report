@@ -1,61 +1,79 @@
-# TR-100 Machine Report
-SKU: TR-100, filed under Technical Reports (TR).
+# AU-100 Machine Report
 
-What is it?
-A machine information report used at [United States Graphics Company](https://x.com/usgraphics)
+SKU: AU-100, filed under Technical Reports (TR).
 
-"Machine Report" is similar to Neofetch, but very basic. It's a bash script that's linked in the user's login startup script, `.bashrc` or `.bash_profile`; it displays useful machine information right in the terminal session. Typically, at U.S. Graphics Company, we use it for remote servers and Machine Report is displayed when a user logs into the server over ssh. See installation instructions on how to do this.
+A macOS-focused terminal machine report for login sessions.
 
-<img src="https://github.com/usgraphics/TR-100/assets/8161031/2a8412dd-09de-45ff-8dfb-e5c6b6f19212" width="500" />
+This repository is a fork of `usgraphics/usgc-machine-report` and is derived from the original TR-100 script.
 
-‼️*** WARNING ***‼️
+## What It Does
 
-Alpha release, only compatible with Debian systems with ZFS root partition running as `root` user. This is not ready for public use *at all*. But you should totally try to use it. The worst that's going to happen is it'll destroy your system. Your help is appreciated in making this project production worthy.
+`machine_report.sh` prints a compact machine summary in the terminal, including:
 
-# Software Philosophy
-Since it is a bash script, you've got the source code. Just modify that for your needs. No need for any abstractions, directly edit the code. No modules, no DSL, no config files, none of it. Single file for easy deployment. Only abstraction that's acceptable is variables at the top of the script to customize the system, but it should stay minimal. 
+- OS, kernel, and full macOS version
+- Apple hardware details (model, model ID, chip, cores, memory, serial)
+- Host/network details (hostname, machine IP, client IP, interface, DNS, optional public IP)
+- System load, disk usage, memory usage, battery
+- Optional temperature row (shown only when available)
+- VPN status, security status, last login, uptime
 
-Problem with providing tools with a silver spoon is that you kill the creativity of the users. Remember MySpace? Let people customize the hell out of it and share it. Central theme as you'll see is this:
+## Platform
 
-```
-ENCOURAGE USERS TO DIRECTLY EDIT THE SOURCE
-```
+This AU-100 version is macOS-only.
 
-When you build a templating engine, a config file, a bunch of switches, etc; it adds 1) bloat 2) complexity 3) limits customization because by definition, customization template engine is going to be less featureful than the source code itself. So let the users just edit the source. Keep it well organized.
+The script is written for macOS command behavior and data sources (`system_profiler`, `scutil`, `vm_stat`, `pmset`, etc.).
 
-Another consideration is to avoid abstracting the source code at the expense of direct 1:1 readability. For e.g., the section "Machine Report" at the end of the bash script prints the output using `printf`—a whole bunch load of `printf` statements. There is no need to add loops or functions returning functions. What you see is roughly what will print. 1:1 mapping is important here for visual ID.
+## Installation
 
-# Design Philosophy
-Tabular, short, clear and concise. The tool's job is to inform the user of the current state of the system they are logging in or are operating. No emojis (except for the one used as a warning sign). No colors (as default, might add an option to add colors).
-
-# Assumed Setup
-This script is designed for us, for our internal use.
-
-- AMD EPYC CPU
-- Debian OS
-- ZFS installed on root partition
-- VMWare Hypervisor
-
-# Dependencies
-- `lscpu`
-
-If your system is different, things might break. Look up the offending line and you can try to fix it for your specific system.
-
-# Installation
-
-For login sessions over ssh, reference the script `~/.machine_report.sh` in your `.bashrc` file. Make sure the script is executable by running `chmod +x ~/.machine_report.sh`.
-
-Copy `machine_report.sh` from this repository and add it to `~/.machine_report.sh` ('.' for hidden file if you wish). Reference it in your `.bashrc` file as follows (example bashrc file):
+Copy the script to your home directory and make it executable:
 
 ```bash
-# This is your .bashrc file. 
-# Add the following lines anywhere in the file.
+cp machine_report.sh ~/.machine_report.sh
+chmod +x ~/.machine_report.sh
+```
 
-# Run Machine Report only when in interactive mode
-if [[ $- == *i* ]]; then
-    ~/.machine_report.sh
+Add it to your interactive shell startup.
+
+### zsh (`~/.zshrc`)
+
+```bash
+if [[ -o interactive ]] && [[ -x "$HOME/.machine_report.sh" ]]; then
+  "$HOME/.machine_report.sh"
 fi
 ```
 
-# License
-BSD 3 Clause License, Copyright © 2024, U.S. Graphics, LLC. See [`LICENSE`](https://github.com/usgraphics/machine-report-staging/blob/master/LICENSE) file for license information.
+### bash (`~/.bashrc`)
+
+```bash
+if [[ $- == *i* ]] && [[ -x "$HOME/.machine_report.sh" ]]; then
+  "$HOME/.machine_report.sh"
+fi
+```
+
+Open a new terminal (or source your shell rc file) to run it automatically.
+
+## Configuration
+
+Edit `machine_report.sh` directly.
+
+Key toggles near the top of the file:
+
+- `ENABLE_PUBLIC_IP=0` enables/disables public IP lookup
+- `PUBLIC_IP_TIMEOUT=2` sets timeout seconds for public IP request
+- `SANITIZE_PII=1` redacts sensitive fields for public-safe output (hostname, IPs, user, serial, DNS, login metadata, VPN IP)
+
+## Attribution
+
+Derived from TR-100 Machine Report by U.S. Graphics, LLC.
+
+Original upstream project:
+
+- https://github.com/usgraphics/usgc-machine-report
+
+## License
+
+BSD 3-Clause License.
+
+Copyright (c) 2024, U.S. Graphics, LLC.
+
+See [`LICENSE`](./LICENSE).
