@@ -17,6 +17,12 @@ This repository is a fork of `usgraphics/usgc-machine-report` and is derived fro
 - Optional temperature row (shown only when available)
 - VPN status, security status, last login, uptime
 
+## Sample Output
+
+Anonymized sample screenshot:
+
+![AU-100 sample output](./assets/au-100-sample-output.png)
+
 ## Platform
 
 This AU-100 version is macOS-only.
