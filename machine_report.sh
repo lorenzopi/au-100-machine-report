@@ -16,43 +16,9 @@ last_login_ip_present=0
 # Optional features
 ENABLE_PUBLIC_IP=0
 PUBLIC_IP_TIMEOUT=2
-SANITIZE_PII=1
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
-}
-
-mask_value() {
-    local value="$1"
-    case "$value" in
-        ""|"Unavailable"|"Disabled"|"Not connected"|"No IP found")
-            printf '%s' "$value"
-            ;;
-        *)
-            printf '%s' "[redacted]"
-            ;;
-    esac
-}
-
-mask_identifier() {
-    local value="$1"
-    local keep="${2:-4}"
-    local len
-    local tail
-
-    if [ -z "$value" ] || [ "$value" = "Unavailable" ]; then
-        printf '%s' "$value"
-        return
-    fi
-
-    len=${#value}
-    if (( len <= keep )); then
-        printf '%s' "[redacted]"
-        return
-    fi
-
-    tail="${value:len-keep:keep}"
-    printf '%s%s' "***" "$tail"
 }
 
 max_length() {
@@ -488,29 +454,6 @@ else
     else
         sys_uptime="Unavailable"
     fi
-fi
-
-# PII redaction for public-safe output
-if [ "$SANITIZE_PII" -eq 1 ]; then
-    net_hostname="[redacted]"
-    net_machine_ip=$(mask_value "$net_machine_ip")
-    net_client_ip=$(mask_value "$net_client_ip")
-    net_interface="[redacted]"
-    net_public_ip=$(mask_value "$net_public_ip")
-    net_current_user="[redacted]"
-    serial_number=$(mask_identifier "$serial_number" 4)
-    if [ "${#net_dns_ip[@]}" -gt 0 ] && [ "${net_dns_ip[0]}" != "Unavailable" ]; then
-        net_dns_ip=("[redacted]")
-    fi
-    if [ "$last_login_ip_present" -eq 1 ]; then
-        last_login_ip=$(mask_value "$last_login_ip")
-    fi
-    if [ -n "$last_login_time" ] && [ "$last_login_time" != "Never logged in" ]; then
-        last_login_time="[redacted]"
-    fi
-    case "$vpn_status" in
-        "Connected "*) vpn_status="Connected [redacted]" ;;
-    esac
 fi
 
 # Width before graphs

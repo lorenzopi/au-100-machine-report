@@ -60,7 +60,6 @@ Key toggles near the top of the file:
 
 - `ENABLE_PUBLIC_IP=0` enables/disables public IP lookup
 - `PUBLIC_IP_TIMEOUT=2` sets timeout seconds for public IP request
-- `SANITIZE_PII=1` redacts sensitive fields for public-safe output (hostname, IPs, user, serial, DNS, login metadata, VPN IP)
 
 ## Attribution
 
