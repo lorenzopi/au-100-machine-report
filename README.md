@@ -1,6 +1,6 @@
 # AU-100 Machine Report
 
-SKU: AU-100, filed under Technical Reports (TR).
+SKU: AU-100
 
 A macOS-focused terminal machine report for login sessions.
 
