@@ -100,12 +100,12 @@ write_mock vm_stat <<'MOCK'
 #!/usr/bin/env bash
 cat <<'OUT'
 Mach Virtual Memory Statistics: (page size of 4096 bytes)
-Pages free:                               100000.
-Pages active:                             200000.
-Pages inactive:                           150000.
-Pages speculative:                         50000.
-Pages wired down:                         120000.
-Pages occupied by compressor:              30000.
+Pages free:                               300000.
+Pages active:                            1200000.
+Pages inactive:                           900000.
+Pages speculative:                        310460.
+Pages wired down:                         800000.
+Pages occupied by compressor:             544580.
 OUT
 MOCK
 
@@ -113,7 +113,7 @@ write_mock df <<'MOCK'
 #!/usr/bin/env bash
 cat <<'OUT'
 Filesystem 1024-blocks Used Available Capacity Mounted on
-/dev/disk1s1 1000000 250000 750000 25% /
+/dev/disk1s1 239358464 170930000 68428464 71% /
 OUT
 MOCK
 
