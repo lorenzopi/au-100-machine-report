@@ -398,8 +398,11 @@ mem_percent=$(awk -v used="$mem_used" -v total="$mem_total" 'BEGIN { if (total =
 mem_total_gb=$(awk -v total="$mem_total" 'BEGIN { printf "%.2f", total / (1024 * 1024 * 1024) }')
 mem_used_gb=$(awk -v used="$mem_used" 'BEGIN { printf "%.2f", used / (1024 * 1024 * 1024) }')
 
-# Disk info (root volume)
+# Disk info (prefer macOS Data volume when available)
 root_partition="/"
+if [ -d "/System/Volumes/Data" ] && df -k "/System/Volumes/Data" >/dev/null 2>&1; then
+    root_partition="/System/Volumes/Data"
+fi
 root_used=$(df -k "$root_partition" 2>/dev/null | awk 'NR==2 {print $3}')
 root_total=$(df -k "$root_partition" 2>/dev/null | awk 'NR==2 {print $2}')
 if [ -z "$root_used" ]; then root_used=0; fi
