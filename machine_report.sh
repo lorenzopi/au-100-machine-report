@@ -12,6 +12,7 @@ BORDERS_AND_PADDING=7
 # Basic configuration
 report_title="ABSOLUTE UNIT RESEARCH"
 last_login_ip_present=0
+last_login_ip=""
 
 # Optional features
 ENABLE_PUBLIC_IP=0
@@ -79,8 +80,8 @@ PRINT_HEADER() {
     local top="┌"
     local bottom="├"
     for (( i = 0; i < length - 2; i++ )); do
-        top+="┬"
-        bottom+="┴"
+        top+="─"
+        bottom+="─"
     done
     top+="┐"
     bottom+="┤"
@@ -147,8 +148,12 @@ PRINT_DATA() {
     fi
 
     local data_len=${#data}
-    if (( data_len >= MAX_DATA_LEN || data_len == MAX_DATA_LEN-1 )); then
-        data=$(echo "$data" | cut -c 1-$((MAX_DATA_LEN-5)))...
+    if (( data_len > max_data_len )); then
+        if (( max_data_len > 3 )); then
+            data=$(echo "$data" | cut -c 1-$((max_data_len-3)))...
+        else
+            data=$(echo "$data" | cut -c 1-"$max_data_len")
+        fi
     else
         data=$(printf "%-${max_data_len}s" "$data")
     fi
@@ -256,17 +261,44 @@ get_public_ip() {
 # Apple hardware/software info
 sp_all=$(system_profiler SPHardwareDataType SPSoftwareDataType 2>/dev/null)
 
-model_name=$(printf '%s\n' "$sp_all" | awk -F': ' '/Model Name:/ {print $2; exit}')
-model_identifier=$(printf '%s\n' "$sp_all" | awk -F': ' '/Model Identifier:/ {print $2; exit}')
-chip_name=$(printf '%s\n' "$sp_all" | awk -F': ' '/Chip:/ {print $2; exit}')
-core_detail=$(printf '%s\n' "$sp_all" | awk -F': ' '/Total Number of Cores:/ {print $2; exit}')
-memory_total_text=$(printf '%s\n' "$sp_all" | awk -F': ' '/Memory:/ {print $2; exit}')
-serial_number=$(printf '%s\n' "$sp_all" | awk -F': ' '/Serial Number \(system\):/ {print $2; exit}')
+model_name=""
+model_identifier=""
+chip_name=""
+core_detail=""
+memory_total_text=""
+serial_number=""
+macos_full_version=""
+os_kernel=""
+sip_status=""
+secure_vm_status=""
 
-macos_full_version=$(printf '%s\n' "$sp_all" | awk -F': ' '/System Version:/ {print $2; exit}')
-os_kernel=$(printf '%s\n' "$sp_all" | awk -F': ' '/Kernel Version:/ {print $2; exit}')
-sip_status=$(printf '%s\n' "$sp_all" | awk -F': ' '/System Integrity Protection:/ {print $2; exit}')
-secure_vm_status=$(printf '%s\n' "$sp_all" | awk -F': ' '/Secure Virtual Memory:/ {print $2; exit}')
+while IFS='=' read -r key value; do
+    case "$key" in
+        model_name) model_name="$value" ;;
+        model_identifier) model_identifier="$value" ;;
+        chip_name) chip_name="$value" ;;
+        core_detail) core_detail="$value" ;;
+        memory_total_text) memory_total_text="$value" ;;
+        serial_number) serial_number="$value" ;;
+        macos_full_version) macos_full_version="$value" ;;
+        os_kernel) os_kernel="$value" ;;
+        sip_status) sip_status="$value" ;;
+        secure_vm_status) secure_vm_status="$value" ;;
+    esac
+done < <(
+    printf '%s\n' "$sp_all" | awk -F': ' '
+        $1 ~ /Model Name$/ {print "model_name=" $2; next}
+        $1 ~ /Model Identifier$/ {print "model_identifier=" $2; next}
+        $1 ~ /Chip$/ {print "chip_name=" $2; next}
+        $1 ~ /Total Number of Cores$/ {print "core_detail=" $2; next}
+        $1 ~ /^[[:space:]]*Memory$/ {print "memory_total_text=" $2; next}
+        $1 ~ /Serial Number \(system\)$/ {print "serial_number=" $2; next}
+        $1 ~ /System Version$/ {print "macos_full_version=" $2; next}
+        $1 ~ /Kernel Version$/ {print "os_kernel=" $2; next}
+        $1 ~ /System Integrity Protection$/ {print "sip_status=" $2; next}
+        $1 ~ /Secure Virtual Memory$/ {print "secure_vm_status=" $2; next}
+    '
+)
 
 # Fallbacks
 if [ -z "$model_name" ]; then model_name="Mac"; fi
@@ -418,11 +450,17 @@ last_login=$(last -n 1 "$USER" 2>/dev/null | head -n 1)
 if [ -z "$last_login" ] || echo "$last_login" | grep -q '^wtmp begins'; then
     last_login_time="Never logged in"
 else
-    last_login_ip=$(echo "$last_login" | awk '{print $3}')
-    if [[ "$last_login_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    last_login_source=$(echo "$last_login" | awk '{print $3}')
+    if [[ "$last_login_source" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         last_login_ip_present=1
+        last_login_ip="$last_login_source"
+        last_login_time=$(echo "$last_login" | awk '{print $4, $5, $6, $7}')
+    else
+        last_login_time=$(echo "$last_login" | awk '{print $3, $4, $5, $6}')
     fi
-    last_login_time=$(echo "$last_login" | awk '{print $3, $4, $5, $6}')
+    if [ -z "$last_login_time" ]; then
+        last_login_time="Unavailable"
+    fi
     if echo "$last_login" | grep -q 'still logged in'; then
         last_login_time="$last_login_time (active)"
     fi
@@ -490,7 +528,7 @@ PRINT_DATA "CLIENT  IP" "$net_client_ip"
 PRINT_DATA "NET IFACE" "$net_interface"
 PRINT_DATA "PUBLIC IP" "$net_public_ip"
 for dns_num in "${!net_dns_ip[@]}"; do
-    PRINT_DATA "DNS  IP $(($dns_num + 1))" "${net_dns_ip[dns_num]}"
+    PRINT_DATA "DNS  IP $((dns_num + 1))" "${net_dns_ip[dns_num]}"
 done
 PRINT_DATA "USER" "$net_current_user"
 

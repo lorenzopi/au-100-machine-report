@@ -67,6 +67,16 @@ Key toggles near the top of the file:
 - `ENABLE_PUBLIC_IP=0` enables/disables public IP lookup
 - `PUBLIC_IP_TIMEOUT=2` sets timeout seconds for public IP request
 
+## Development Checks
+
+Run local checks before pushing changes:
+
+```bash
+bash -n machine_report.sh
+shellcheck machine_report.sh
+bash tests/golden.sh
+```
+
 ## Attribution
 
 Derived from TR-100 Machine Report by U.S. Graphics, LLC.
